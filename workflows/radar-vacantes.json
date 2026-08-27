@@ -1,0 +1,384 @@
+{
+  "name": "Radar de vacantes",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "de1a73fa-00ce-48b0-9f9e-4ebe04805579",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.getonbrd.com/api/v0/categories/programacion/jobs?per_page=30&expand[]=company",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "96ae2b0e-f4a0-4654-a690-4434f2b9e1f3",
+      "name": "HTTP Request",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "07a600f5-abd4-479f-ba02-d2612a9f85f0",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const a = $json.attributes ?? {};\n\nif (a.remote !== true) return null;\n\nconst paises = a.countries ?? [];\nconst bloqueado = paises.length > 0 &&\n  !paises.some(p => ['Colombia', 'Latin America', 'Remote'].includes(p));\nif (bloqueado) return null;\n\nconst descripcion = (a.description ?? '')\n  .replace(/<[^>]*>/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .slice(0, 2500);\n\nreturn {\n  json: {\n    id: String($json.id),\n    titulo: a.title ?? '',\n    empresa: a.company?.data?.attributes?.name ?? 'desconocida',\n    url: $json.links?.public_url ?? '',\n    paises: paises.join(', ') || 'no especificado',\n    postulaciones: a.applications_count ?? 0,\n    descripcion: descripcion\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "49e91bf8-b8fe-4820-b602-8e2fd01b5cf8",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [{ text: `Eres un evaluador de compatibilidad laboral. PERFIL DEL CANDIDATO: 13 anios en logistica de exportacion, inventarios y comercio exterior; cumplimiento BASC/OEA; SAP. Construye automatizaciones con n8n, agentes con Claude Code y MCP, apps en Next.js/TypeScript desplegadas en Vercel, scripts en Python. Ingles B2. Reside en Colombia, requiere 100% remoto. VACANTE: Cargo: ${$json.titulo}. Empresa: ${$json.empresa}. Paises: ${$json.paises}. Descripcion: ${$json.descripcion}. Responde UNICAMENTE con un objeto JSON valido, sin markdown ni texto adicional, con exactamente estas tres claves: puntaje (numero entero de 0 a 100), motivo (texto de maximo 20 palabras), bloqueante (texto describiendo un requisito que el candidato no cumple, o null si no hay ninguno).` }] }] }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 15000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        912,
+        0
+      ],
+      "id": "737be53b-bf87-439f-a3a7-e77c47932798",
+      "name": "HTTP Request1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "executeOnce": false,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "flmr2cgdimhL0nia",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const texto = $json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';\nconst id = String($('Code in JavaScript').item.json.id ?? '');\ntry {\n  const limpio = texto.replace(/```json/g, '').replace(/```/g, '').trim();\n  const r = JSON.parse(limpio);\n  if (typeof r.puntaje !== 'number' || r.puntaje < 0 || r.puntaje > 100) {\n    throw new Error('puntaje fuera de rango: ' + r.puntaje);\n  }\n  return {\n    json: {\n      id: id,\n      valido: true,\n      puntaje: r.puntaje,\n      motivo: r.motivo ?? '',\n      bloqueante: r.bloqueante ?? null\n    }\n  };\n} catch (e) {\n  return {\n    json: {\n      id: id,\n      valido: false,\n      puntaje: 0,\n      motivo: 'respuesta invalida del modelo',\n      bloqueante: null,\n      error: e.message,\n      crudo: texto.slice(0, 200)\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        0
+      ],
+      "id": "32d105ed-26fc-4add-8981-3895a6864a8f",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "fieldsToMatchString": "id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1392,
+        0
+      ],
+      "id": "8fa24d88-d5e0-4c5e-a5df-e27569c90c12",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "546237bf-129b-46da-973d-f305f17ee2ef",
+              "leftValue": "={{ $json.puntaje }}",
+              "rightValue": 70,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1648,
+        -96
+      ],
+      "id": "5e360155-232c-4af0-a894-48d0fd47d497",
+      "name": "Filtrar puntaje >= 70"
+    },
+    {
+      "parameters": {
+        "sendTo": "afmancilla.92@gmail.com",
+        "subject": "=Vacante compatible: {{ $json.titulo }}",
+        "emailType": "text",
+        "message": "=Titulo: {{ $json.titulo }}\nEmpresa: {{ $json.empresa }}\nPuntaje: {{ $json.puntaje }}\nMotivo: {{ $json.motivo }}\nPostulaciones: {{ $json.postulaciones }}\nURL: {{ $json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1872,
+        -96
+      ],
+      "id": "904c3255-3556-439e-96cc-4b2161415c4d",
+      "name": "Enviar correo",
+      "webhookId": "bb2d31f4-e8fd-474c-a1ec-cddc0450c64d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "JzEYSgme3uG4pcdB",
+          "name": "Gmail account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Ingesta\nAPI publica de Get on Board, sin autenticacion",
+        "height": 192,
+        "width": 464,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -256
+      ],
+      "id": "8bd1c3cb-095e-4fbd-a428-351f92a29c29",
+      "name": "Nota Ingesta"
+    },
+    {
+      "parameters": {
+        "content": "## Filtro sin costo\nDescarta no-remotas antes de gastar cuota de LLM",
+        "height": 192,
+        "width": 216,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        656,
+        -256
+      ],
+      "id": "7788ba14-a6ec-45fb-9aed-05fe658f5293",
+      "name": "Nota Filtro previo"
+    },
+    {
+      "parameters": {
+        "content": "## Puntuacion IA\nGemini 3.6 Flash gratuito. Batching 1 item/15s por limite de 5 req/min",
+        "height": 192,
+        "width": 216,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -256
+      ],
+      "id": "06832e51-1594-4acf-82de-8e13a95ec24a",
+      "name": "Nota LLM"
+    },
+    {
+      "parameters": {
+        "content": "## Validacion\nSi el modelo devuelve JSON invalido, se marca y el flujo continua",
+        "height": 192,
+        "width": 216,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -256
+      ],
+      "id": "ccda56ec-8407-46da-bdae-09fa4691f5fe",
+      "name": "Nota Validacion"
+    },
+    {
+      "parameters": {
+        "content": "## Manejo de fallos\nSi la API devuelve 429 (cuota) o 5xx, el item sale por la rama de error y se marca como invalido. El flujo no se detiene.",
+        "width": 336
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        960,
+        144
+      ],
+      "id": "35c903e4-af8f-409d-8acc-07b8a29018e5",
+      "name": "Nota Manejo de fallos"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Filtrar puntaje >= 70",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar puntaje >= 70": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6526236d-f7bc-4d2b-afb3-c490a36cd092",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8b9706007bd3e8bcaf539d29d7446f3aeafc2d89c9383eb39ed17b7631c16a40"
+  },
+  "nodeGroups": [],
+  "id": "jufu46OeaDDL4Zad",
+  "tags": []
+}
