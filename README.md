@@ -14,6 +14,8 @@ I was reading job boards manually every morning, most listings ruled out by coun
 
 Schedule (7am) → fetch 30 postings → split → free pre-filter → LLM scoring → output validation → merge → threshold filter → email
 
+![Workflow canvas](screenshots/canvas.png)
+
 ### Engineering decisions
 
 **Free pre-filter before the LLM.** The API returns `remote` and `countries` as structured fields, so non-remote and country-restricted postings are dropped in a Code node before any model call. On a typical run this cuts 30 postings to 14 — roughly half the LLM quota saved at zero cost.
