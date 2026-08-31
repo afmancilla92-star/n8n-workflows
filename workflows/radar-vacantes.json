@@ -32,7 +32,7 @@
         0
       ],
       "id": "96ae2b0e-f4a0-4654-a690-4434f2b9e1f3",
-      "name": "HTTP Request",
+      "name": "Fetch Get on Board",
       "retryOnFail": true
     },
     {
@@ -61,7 +61,7 @@
         0
       ],
       "id": "49e91bf8-b8fe-4820-b602-8e2fd01b5cf8",
-      "name": "Code in JavaScript"
+      "name": "Prefiltro remoto"
     },
     {
       "parameters": {
@@ -88,7 +88,7 @@
         0
       ],
       "id": "737be53b-bf87-439f-a3a7-e77c47932798",
-      "name": "HTTP Request1",
+      "name": "LLM Scoring",
       "retryOnFail": true,
       "waitBetweenTries": 5000,
       "executeOnce": false,
@@ -112,7 +112,7 @@
         0
       ],
       "id": "32d105ed-26fc-4add-8981-3895a6864a8f",
-      "name": "Code in JavaScript1"
+      "name": "Validar salida"
     },
     {
       "parameters": {
@@ -164,7 +164,7 @@
     },
     {
       "parameters": {
-        "sendTo": "afmancilla.92@gmail.com",
+        "sendTo": "you@example.com",
         "subject": "=Vacante compatible: {{ $json.titulo }}",
         "emailType": "text",
         "message": "=Titulo: {{ $json.titulo }}\nEmpresa: {{ $json.empresa }}\nPuntaje: {{ $json.puntaje }}\nMotivo: {{ $json.motivo }}\nPostulaciones: {{ $json.postulaciones }}\nURL: {{ $json.url }}",
@@ -271,14 +271,14 @@
       "main": [
         [
           {
-            "node": "HTTP Request",
+            "node": "Fetch Get on Board",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "HTTP Request": {
+    "Fetch Get on Board": {
       "main": [
         [
           {
@@ -293,18 +293,18 @@
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "Prefiltro remoto",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript": {
+    "Prefiltro remoto": {
       "main": [
         [
           {
-            "node": "HTTP Request1",
+            "node": "LLM Scoring",
             "type": "main",
             "index": 0
           },
@@ -316,25 +316,25 @@
         ]
       ]
     },
-    "HTTP Request1": {
+    "LLM Scoring": {
       "main": [
         [
           {
-            "node": "Code in JavaScript1",
+            "node": "Validar salida",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Code in JavaScript1",
+            "node": "Validar salida",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Code in JavaScript1": {
+    "Validar salida": {
       "main": [
         [
           {
