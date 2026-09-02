@@ -1,6 +1,6 @@
 # n8n Workflows
 
-Production-minded n8n automations I've built, exported with credentials stripped.
+Production-minded n8n automations I've built. Exports retain credential references (internal n8n IDs) but contain no tokens, keys or secrets.
 
 ## radar-vacantes
 
@@ -42,3 +42,48 @@ Adjust the profile text in the LLM node's request body to match your own backgro
 ### Status
 
 Built and validated end to end.
+
+![Execution history](screenshots/ejecuciones.png)
+
+## agente-leads-telegram
+
+A conversational lead-qualification agent on Telegram. It talks to inbound prospects in Colombian Spanish, extracts four qualification fields across a multi-turn conversation, and flags the lead once all four are known.
+
+### Why it exists
+
+Service contractors lose leads to response time. An inbound message at 9pm sits unanswered until morning, by which point the prospect has called someone else. This agent responds immediately and does the qualification work before a human is involved.
+
+### Flow
+
+Telegram trigger → normalize message → AI Agent (Gemini 3.6 Flash + conversation memory) → output validation → reply
+
+### Engineering decisions
+
+**AI Agent over a raw HTTP call.** The first version called the model directly over HTTP. It worked, but it was stateless — every message was treated as the first, so the agent could never accumulate the four fields. Switching to n8n's AI Agent node with an attached memory sub-node was a core redesign, not a patch.
+
+**Instructions in the system message, not the prompt.** With memory attached, anything passed as the user prompt is stored in conversation history. Full instructions in the prompt meant the 10-message window filled with copies of the instruction set instead of the actual conversation — degrading exactly when more context was needed, and paying for those tokens every turn.
+
+**Output validation.** The agent is instructed to return structured JSON. The validation node parses it and, on failure, returns a graceful apology message rather than throwing. The conversation survives a malformed response.
+
+**Error branch.** The agent node uses `continueErrorOutput`. Both outputs route to the same validation node, so a 503 from the model provider still produces a reply to the customer instead of silence.
+
+### Known limitation: memory concurrency
+
+Simple Memory has no locking. Under concurrent execution — two Telegram messages arriving before the first finishes its 5-20s model call — both executions read the same memory snapshot and write over each other. The result is a corrupted transcript with duplicated and out-of-order turns, and an agent that re-asks questions it already has answers to.
+
+I found this by instrumenting the execution history: comparing `update_id` and `message_id` across paired executions showed distinct messages running in the same second, and the stored transcript contained interleaved fragments of four separate conversations.
+
+The fix is external memory — Postgres or Redis chat memory — which also solves persistence, since Simple Memory does not survive an instance restart. Not implemented here; documented as the known boundary of this build.
+
+### Running it
+
+Import `workflows/agente-leads-telegram.json`. Requires your own credentials:
+
+- Telegram Bot API token (from @BotFather)
+- Google Gemini (PaLM) API — free tier
+
+Adjust the system message for your vertical and the qualification fields you need.
+
+### Status
+
+Working end to end in single-message-at-a-time conversation. Degrades under concurrent messages, as documented above.
