@@ -1,0 +1,277 @@
+{
+  "name": "Agente calificador de leads",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "557d0b72-b3ae-4c5a-ad67-deb6ecd4b2fd",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "7ee44833-959a-4c4f-adce-c5e7dbec1f8e",
+      "credentials": {
+        "telegramApi": {
+          "id": "VfPAdyeGDeT8tPgf",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const m = $json.message ?? {};\nreturn {\n  json: {\n    chatId: String(m.chat?.id ?? ''),\n    nombre: m.from?.first_name ?? 'cliente',\n    texto: m.text ?? ''\n  }\n};"
+      },
+      "id": "27da6345-9c68-4131-bcde-0c4f1fd2fd72",
+      "name": "Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const texto = $json.output ?? '';\nconst chatId = String($('Code').item.json.chatId ?? '');\nconst nombre = String($('Code').item.json.nombre ?? 'cliente');\ntry {\n  const limpio = texto.replace(/```json/g, '').replace(/```/g, '').trim();\n  const r = JSON.parse(limpio);\n  return { json: { chatId, nombre, valido: true, ...r } };\n} catch (e) {\n  return { json: { chatId, nombre, valido: false, respuesta: 'Disculpa, tuve un problema. ¿Puedes repetir tu mensaje?', error: e.message } };\n}"
+      },
+      "id": "84f39112-276c-4cac-baf3-4d2377c60498",
+      "name": "Code1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.respuesta }}",
+        "additionalFields": {}
+      },
+      "id": "7446badb-881c-4815-aba3-385a9da619e3",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        912,
+        0
+      ],
+      "webhookId": "bbbbbbb1-0001-4000-8000-000000000005",
+      "credentials": {
+        "telegramApi": {
+          "id": "VfPAdyeGDeT8tPgf",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Entrada\nRecibe mensajes del bot de Telegram",
+        "width": 280
+      },
+      "id": "24f89f85-9a00-48a6-b7b5-9aeea6f25e5b",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LLM\nGemini 3.6 Flash. Extrae servicio, urgencia, ciudad y presupuesto con memoria de conversación por chatId",
+        "width": 300
+      },
+      "id": "58b388bb-2c05-4f7f-abac-f30c380b682c",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Validación\nSi el modelo devuelve JSON inválido, responde con mensaje de disculpa. El flujo no se detiene.",
+        "width": 320
+      },
+      "id": "93d78c09-4ae3-46a6-8453-9b5f773b7099",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        784,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Notificación\nCuando el lead tiene los 4 datos, avisa al contratista",
+        "width": 300
+      },
+      "id": "da872b90-e2e1-4fd0-b3be-db0d03b3af3d",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'El cliente se llama ' + $json.nombre + '. Dice: ' + $json.texto }}",
+        "options": {
+          "systemMessage": "Eres un asistente de servicios para el hogar (solar, HVAC, techos) en Colombia. Hablas español colombiano natural y breve, máximo 2 frases.\nIMPORTANTE: revisa SIEMPRE el historial de la conversación antes de responder. NUNCA vuelvas a preguntar un dato que el cliente ya te dio en mensajes anteriores.\nNecesitas cuatro datos: servicio, urgencia, ciudad y presupuesto aproximado. Pregunta ÚNICAMENTE por los que aún faltan, uno a la vez. Cuando tengas los cuatro, agradece y di que un asesor lo contactará.\nResponde siempre únicamente con un JSON válido sin markdown, con estas claves: respuesta, servicio, urgencia, ciudad, presupuesto, calificado. En servicio, urgencia, ciudad y presupuesto pon SIEMPRE todos los valores que ya conozcas del historial, no solo el del último mensaje. calificado es true solo cuando los cuatro tienen valor."
+        }
+      },
+      "id": "6ba0fb83-5623-40f0-a7c3-9e1e10119c91",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        416,
+        272
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.6-flash",
+        "options": {}
+      },
+      "id": "02a71584-f49f-459a-bd3b-d5ea630d6d03",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        368,
+        480
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "flmr2cgdimhL0nia",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Code').item.json.chatId + '-v2' }}",
+        "contextWindowLength": 10
+      },
+      "id": "7b72f53d-bbf8-4883-b3c5-8d4183c7f06b",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        576,
+        480
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "103cf1f6-5ded-4442-a866-636fa9c569ae",
+  "meta": {
+    "instanceId": "8b9706007bd3e8bcaf539d29d7446f3aeafc2d89c9383eb39ed17b7631c16a40"
+  },
+  "nodeGroups": [],
+  "id": "61JP7QRGFon6LBZI",
+  "tags": []
+}
